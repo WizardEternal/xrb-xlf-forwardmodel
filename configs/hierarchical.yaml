@@ -1,0 +1,99 @@
+# =============================================================================
+# hierarchical.yaml -- configuration for scripts/run_hierarchical.py
+#
+# Phase 3 experiment (b): the HIERARCHICAL STACK.  A "survey" of N_gal galaxies
+# that share ONE global HMXB XLF -- the same per-SFR normalization xi and the
+# same slope gamma -- but each with its OWN (SFR, distance, eROSITA exposure).
+# We fit the survey three ways and compare the precision on gamma:
+#   (i)   JOINTLY  -- one shared theta = (log10 xi, gamma), summed likelihood;
+#   (ii)  BEST single galaxy alone (the one with the most detected sources);
+#   (iii) WORST-10 stacked (the 10 fewest-detection galaxies) -- shows the stack
+#         recovering gamma from galaxies that individually constrain nothing.
+#
+# THE POINT (documented design choice): with the shallow eROSITA all-sky limit
+# and distances out to 30 Mpc, MANY galaxies land in the few-detections regime
+# (0-5 detected HMXBs).  Individually they are nearly useless for the slope; the
+# joint likelihood POOLS their faint information (each contributes its Poisson
+# sum_i ln lambda - Lambda_g term, and even 0-detection galaxies contribute a
+# finite -Lambda_g that constrains the normalization).  We measure the precision
+# gain of the joint fit over the single best galaxy.
+#
+# Hierarchy is deliberately SIMPLE: shared theta, NO per-galaxy scatter.
+# Per-galaxy log-normal scatter on xi is the documented optional extension,
+# intentionally omitted from the core experiment.
+# =============================================================================
+
+seed: 20260611           # global seed for the whole survey (reproducible)
+
+L_unit: 1.0e38           # erg/s -- definition of L38 (matches xlf_defaults)
+
+# --- the shared global XLF (the TRUTH the survey is drawn from) --------------
+# Mineo+12 HMXB single power law.  xi is the PER-SFR normalization (NOT xi*SFR):
+# every galaxy folds in its own SFR, so they all share this one xi and gamma.
+truth:
+  xi: 1.49               # M12 per-SFR normalization -- shared across the survey
+  gamma: 1.60            # M12 differential slope -- the shared global parameter
+  L_cut: 2.1e40          # erg/s; high-L cutoff (FIXED in simulation and fit)
+  band: "0.5-8 keV"
+
+# --- the survey: N_gal galaxies with per-galaxy covariates -------------------
+# SFR is log-uniform in [0.2, 20] Msun/yr, distance log-uniform in [3, 30] Mpc.
+# log-uniform (not uniform) so the survey spans the dynamic range evenly in dex
+# -- this is what puts a healthy fraction of galaxies in the few-detections
+# regime (low SFR and/or far) that motivates the stack.
+survey:
+  n_galaxies: 30
+  sfr_min: 0.2           # Msun/yr  (log-uniform)
+  sfr_max: 20.0
+  distance_min_Mpc: 3.0  # (log-uniform)
+  distance_max_Mpc: 30.0
+  detector: erosita_erass1   # the shallow all-sky preset -- the whole point
+  absorption_flux_factor: 1.0
+
+# --- forward-model settings (population + observation) ----------------------
+forward:
+  L_min: 1.0e35
+  absorption_flux_factor: 1.0
+  detectors:
+    erosita_erass1:
+      band: "0.5-2 keV"
+      flux_limit_50: 5.0e-14     # Merloni+24 50% completeness limit
+      completeness_width_dex: 0.2
+      exposure_s: 200.0
+      cts_to_flux: 1.0e-12
+    chandra_like:
+      band: "0.5-8 keV"
+      flux_limit_50: 5.0e-15
+      completeness_width_dex: 0.2
+      exposure_s: 50000.0
+      cts_to_flux: 5.0e-15
+
+# --- inference (priors, grid, sampler) --------------------------------------
+# The shared parameter vector is theta = (log10 xi, gamma).  Priors bracket the
+# truth (log10 1.49 = 0.173; gamma 1.6) with margin.
+inference:
+  priors:
+    log_xi_eff:                  # key name kept for compatibility with
+                                 # hmxb_parameters_from_config; here it is the
+                                 # per-SFR log10 xi (relabelled in the script).
+      prior: uniform
+      lo: -1.0
+      hi: 2.0
+    gamma:
+      prior: uniform
+      lo: 0.8
+      hi: 2.6
+  grid:
+    points_per_dex: 200
+  sampler:
+    n_live: 400            # UltraNest min_num_live_points
+    n_walkers: 32          # emcee (fallback)
+    n_steps: 4000
+    n_burn: 1000
+
+# --- the worst-10 stack (experiment iii) ------------------------------------
+run:
+  sampler: ultranest
+  worst_k: 10              # how many fewest-detection galaxies to stack for (iii)
+  output_dir: outputs/diagnostics
+  figure: hierarchical_stack.png

@@ -1,0 +1,116 @@
+# =============================================================================
+# recovery_suite.yaml -- configuration for scripts/run_recovery_suite.py
+#
+# Phase 3 experiment (a): the single-galaxy recovery suite -- the input to the
+# repo's MONEY PLOT.  For a grid of (target N_det) x (true slope gamma) x
+# (fitter) x (realization), we simulate one galaxy tuned to yield ~ the target
+# number of detected HMXBs, fit it with the selection-aware AND the naive
+# likelihood, and record the recovered posterior so the analysis script can
+# measure bias, scatter and coverage vs N_det.
+#
+# Crash-resumable by construction: every completed fit is appended as one JSONL
+# row to outputs/recovery/results.jsonl keyed by (N_det_target, gamma, fitter,
+# realization, sampler); on restart, already-present keys are skipped, so a long
+# parallel run can be interrupted and resumed safely.
+# =============================================================================
+
+seed_base: 20260611      # base seed; per-cell/realization seeds derive from it
+
+L_unit: 1.0e38           # erg/s -- definition of L38 (matches xlf_defaults)
+
+# --- the recovery grid ------------------------------------------------------
+grid:
+  # target number of DETECTED HMXBs per galaxy (the x-axis of the money plot).
+  n_det_targets: [5, 15, 50, 150, 500]
+  # true differential slope gamma of the simulated HMXB XLF.
+  gammas: [1.4, 1.6, 1.8]
+  # both fitters are always run on the SAME simulated galaxy per realization.
+  fitters: [selection-aware, naive]
+  # realizations (independent simulated galaxies) per (N_det, gamma) cell.
+  # Pilot uses --n-realizations 5 on the CLI; the full run uses this value.
+  n_realizations: 50
+
+# --- the simulated galaxy (fixed; only SFR is tuned per cell) ----------------
+# Distance and detector are held fixed across the whole grid so the only thing
+# that changes the detected count is the XLF normalization (via SFR).  The deep
+# chandra_like preset places the 50% flux limit BELOW the bulk of the XLF at
+# D=5 Mpc, so detections sample the well-populated faint end -- the regime where
+# selection physics matters and the naive fitter is expected to bias gamma.
+galaxy:
+  distance_Mpc: 5.0
+  detector: chandra_like
+  absorption_flux_factor: 1.0
+  # true normalization per (Msun/yr); Mineo+12 xi = 1.49 is the TRUTH.  Only the
+  # SLOPE gamma is varied across the grid; xi is held at the M12 value, and the
+  # recovered quantity is log10(xi_eff = xi * SFR_tuned).
+  xi_true: 1.49
+  L_cut: 2.1e40            # erg/s; high-L cutoff (FIXED in both simulation and fit)
+
+# --- the tuning rule (target N_det -> SFR), documented and EXACT ------------
+# E[N_det] = Lambda(theta) = integral dN/dL(L | xi, gamma, SFR) * P_det(L) dL.
+# Because SFR multiplies the XLF normalization LINEARLY, Lambda is linear in SFR:
+#
+#     Lambda(SFR) = SFR * Lambda_unit(gamma, distance, detector)
+#
+# where Lambda_unit is Lambda evaluated at SFR = 1 (depends only on gamma, the
+# distance and the detector preset -- NOT on SFR).  The tuning rule is therefore
+# exact and closed-form:
+#
+#     SFR_tuned = target_N_det / Lambda_unit(gamma, distance, detector)
+#
+# This makes the EXPECTED detected count exactly equal to the target; the
+# ACTUAL realized N_det is a Poisson draw around it (recorded per fit as
+# n_det_actual).  No grid search, no iteration -- one analytic division.
+# (Verified empirically: at gamma=1.6, D=5 Mpc, chandra_like, Lambda_unit~7.97,
+# so e.g. target=15 -> SFR~1.88; target=500 -> SFR~62.7.)
+tuning:
+  rule: "SFR = target_N_det / Lambda_unit(gamma, distance, detector)"
+
+# --- forward-model settings (population + observation) ----------------------
+forward:
+  L_min: 1.0e35
+  absorption_flux_factor: 1.0
+  detectors:
+    erosita_erass1:
+      band: "0.5-2 keV"
+      flux_limit_50: 5.0e-14
+      completeness_width_dex: 0.2
+      exposure_s: 200.0
+      cts_to_flux: 1.0e-12
+    chandra_like:
+      band: "0.5-8 keV"
+      flux_limit_50: 5.0e-15
+      completeness_width_dex: 0.2
+      exposure_s: 50000.0
+      cts_to_flux: 5.0e-15
+
+# --- inference (priors, grid, sampler) --------------------------------------
+# Tight-but-safe flat priors so per-fit time at N_det=5-15 stays seconds with
+# UltraNest (faster sampler per fit; no log_dir so no HDF5 store).
+# Priors comfortably bracket all three true gammas (1.4/1.6/1.8) and the full
+# range of tuned log10(xi_eff) (target 5 @ gamma=1.8 -> SFR~1.1, log_xi_eff~0.2;
+# target 500 @ gamma=1.4 -> SFR~65, log_xi_eff~2.0).
+inference:
+  priors:
+    log_xi_eff:
+      prior: uniform
+      lo: -1.0             # log10 units; brackets all tuned xi_eff
+      hi: 3.0
+    gamma:
+      prior: uniform
+      lo: 0.8              # brackets gamma in {1.4, 1.6, 1.8} with margin
+      hi: 2.6
+  grid:
+    points_per_dex: 200
+  sampler:
+    n_live: 400            # UltraNest min_num_live_points
+    n_walkers: 32          # emcee (not used here; ultranest is the suite sampler)
+    n_steps: 4000
+    n_burn: 1000
+
+# --- run / parallelism ------------------------------------------------------
+run:
+  sampler: ultranest       # faster per-fit sampler
+  max_workers: 6           # capped to bound memory use
+  output_dir: outputs/recovery
+  results_jsonl: results.jsonl     # append-one-row-per-fit (crash-resume key)

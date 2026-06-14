@@ -1,0 +1,27 @@
+data/
+.venv/
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+*.pyc
+outputs/**/*.h5
+outputs/**/*.parquet
+# generated diagnostic/figure artifacts
+outputs/**/*.png
+outputs/**/*.pdf
+outputs/**/*.npz
+# recovery-suite result tables (regenerable by re-running the fitting suites)
+outputs/**/*.jsonl
+outputs/**/*.csv
+
+# --- FINAL figures committed to the repo: only the README artifacts below are
+#     tracked.  Regenerating them re-runs the recovery/coverage suites (the raw
+#     result tables above are not committed).  Everything else under outputs/
+#     stays ignored by the rules above.
+!outputs/recovery/money_plot.png
+!outputs/recovery/coverage_curve.png
+!outputs/diagnostics/lxsfr_nonlinearity.png
+!outputs/diagnostics/hierarchical_stack.png
+!outputs/diagnostics/demo_xlf_draw.png
+# optional extension: real-galaxy demonstration figure (README artifact)
+!outputs/diagnostics/real_galaxy_fit.png

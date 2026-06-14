@@ -1,0 +1,179 @@
+# =============================================================================
+# xlf_defaults.yaml -- default configuration for the XRB X-ray luminosity
+# function forward model.
+#
+# Every numeric value below was checked against the primary papers on
+# 2026-06-11. Each entry carries an inline citation (paper + equation/table).
+# DO NOT edit values without re-checking the source paper.
+#
+# BAND BOOKKEEPING (critical -- never mix normalizations across bands):
+#   * GGS03 HMXB values are 2-10 keV.
+#   * Mineo+12 (M12) and Lehmer+19 values are 0.5-8 keV.
+#   * Gilfanov 2004 (G04) LMXB luminosities are heterogeneous (paper caveat);
+#     we treat the G04 shape as 0.5-8 keV for the default simulator.
+#   * eROSITA flux limit (Merloni+24) is quoted in the 0.5-2 keV band.
+# The simulator default is 0.5-8 keV with M12 HMXB + G04 LMXB shapes.
+# Each parameter block declares its own `band:` key so the bookkeeping is
+# explicit and machine-checkable.
+# =============================================================================
+
+# Global reproducibility seed. Everything (population draw, noise, sampling)
+# derives from this seed. (Everything is reproducible from config + seed.)
+# Note: at D=10 Mpc with the (shallow) eRASS1 limit the demo galaxy is in a
+# marginal-detection regime -- the *expected* detected XRB count is ~0.9, so a
+# given realization yields 0-4 detections (P(0)~40%). This seed yields a
+# representative non-empty draw (n_detected = 4) so the demo's drawn-vs-detected
+# diagnostic is informative; any seed is equally valid (the marginal regime is
+# itself the selection story). Eddington bias is verified at high statistics in
+# the test suite, not from the demo's handful of sources.
+seed: 20260602
+
+# Luminosity bookkeeping. L38 = L / 1e38 erg/s is the working unit for the HMXB
+# XLF; the LMXB XLF uses physical erg/s internally. L_unit pins the reference.
+L_unit: 1.0e38        # erg/s -- definition of L38
+
+# -----------------------------------------------------------------------------
+# HMXB X-ray luminosity function
+# -----------------------------------------------------------------------------
+# Single power law in L38:  dN/dL38 = xi * SFR * L38^(-gamma), with a high-L
+# exponential-style cutoff. Two parameter presets are provided; `preset`
+# selects which one the model uses by default.
+hmxb:
+  preset: mineo12          # one of: mineo12, ggs03
+
+  # --- Mineo, Gilfanov & Sunyaev 2012, MNRAS 419, 2095 (arXiv:1105.4610) ------
+  # Default preset. Band: 0.5-8 keV. Valid log L ~ 35-40.
+  mineo12:
+    band: "0.5-8 keV"      # M12 luminosities are 0.5-8 keV
+    xi: 1.49               # normalization per (Msun/yr); M12 (xi = 1.49 +/- 0.07)
+    gamma: 1.60            # differential slope; M12 (gamma = 1.60 +/- 0.02)
+    # M12's single-PL fit is formally a cutoff power law. The break/cutoff in
+    # the single-PL form is not tightly constrained by M12 itself; we adopt a
+    # high-L exponential cutoff so the integral converges and so the bright end
+    # is bounded. Set to the GGS03 cutoff value (2.1e40, 2-10 keV) as a
+    # physically motivated default; it sits well above the L_X-SFR validation
+    # luminosity (1e38), so N(>1e38) is insensitive to it. Set in this config.
+    L_cut: 2.1e40          # erg/s; cutoff (adopted from GGS03 Eq.7; config-set)
+    # Reference cross-check normalization (M12 Eq. 20, 22), used by RESULTS.md:
+    #   L_X(0.5-8) = 2.61e39 * SFR ; N(>1e38) = 3.22 * SFR
+    ref_N_gt_1e38_per_sfr: 3.22   # M12 Eq. 22 (validation target)
+
+  # --- Grimm, Gilfanov & Sunyaev 2003, MNRAS 339, 793 (astro-ph/0205371) ------
+  # Alternative preset. Band: 2-10 keV.
+  ggs03:
+    band: "2-10 keV"       # GGS03 luminosities are 2-10 keV
+    xi: 3.3                # normalization per (Msun/yr); GGS03 Eq.6 (3.3 +1.1/-0.8)
+    gamma: 1.61            # differential slope; GGS03 Eq.6 (1.61 +/- 0.12)
+    L_cut: 2.1e40          # erg/s; GGS03 Eq.7 (L_c = 210 in L38 units) [CORRECTED]
+
+# -----------------------------------------------------------------------------
+# LMXB X-ray luminosity function
+# -----------------------------------------------------------------------------
+# Two-break broken power law (three slopes) with a high-L cutoff, normalized
+# to stellar mass. Gilfanov 2004, MNRAS 349, 146 (astro-ph/0309454),
+# Eq. 8 + Table 3 ("all"), normalization Eqs. 9, 11.
+lmxb:
+  band: "0.5-8 keV"        # treated as 0.5-8 keV for the simulator (G04 heterogeneous; see README)
+  # Differential slopes (dN/dL ~ L^-alpha in each segment):
+  alpha1: 1.0              # L < L_b1 ; G04 Table 3 (1.0 +/- 0.13)
+  alpha2: 1.86             # L_b1 < L < L_b2 ; G04 Table 3 (1.86 +/- 0.12)
+  alpha3: 4.8              # L_b2 < L < L_cut ; G04 Table 3 (4.8 +/- 1.1)
+  L_b1: 1.9e37             # erg/s; first break; G04 Table 3
+  L_b2: 5.0e38             # erg/s; second break; G04 Table 3
+  L_cut: 5.0e40            # erg/s; high-L cutoff (fixed); G04 Table 3
+  # Normalization: K1 = number-density scale at L_b1 per 1e11 Msun.
+  # G04 Eqs. 9, 11:  K1 = 440.4 +/- 25.9 per 1e11 Msun (at L_b1);
+  #                  N(>1e37) = 142.9 +/- 8.4 per 1e11 Msun (validation target).
+  K1: 440.4                # differential normalization at L_b1 per 1e11 Msun; G04 Eq.9
+  K1_mass_ref: 1.0e11      # Msun -- mass the K1 normalization refers to
+  ref_N_gt_1e37_per_1e11Msun: 142.9   # G04 Eq.11 (validation target)
+
+# -----------------------------------------------------------------------------
+# Lehmer et al. 2019 global model (modern cross-check preset; not default)
+# Lehmer et al. 2019, ApJS 243, 3 (arXiv:1905.05197), Table 4. Band: 0.5-8 keV.
+# -----------------------------------------------------------------------------
+lehmer19:
+  band: "0.5-8 keV"
+  hmxb:
+    K_HMXB: 1.96           # per (Msun/yr); Lehmer+19 Table 4 (1.96 +/- 0.14)
+    gamma: 1.65            # Lehmer+19 Table 4 (1.65 +0.03/-0.02)
+    log_L_cut: 40.7        # log10(erg/s); Lehmer+19 Table 4
+  lmxb:
+    K_LMXB: 33.8           # per 1e11 Msun; Lehmer+19 Table 4 (33.8 +7.3/-3.6)
+    alpha1: 1.28           # Lehmer+19 Table 4
+    L_b: 1.48e38           # erg/s; Lehmer+19 Table 4
+    alpha2: 2.33           # Lehmer+19 Table 4
+
+# -----------------------------------------------------------------------------
+# Forward-model population & observation settings
+# -----------------------------------------------------------------------------
+forward:
+  L_min: 1.0e35            # erg/s; lower luminosity bound of the population draw
+  # Demo galaxy properties (used by scripts/run_forward_demo.py):
+  demo_galaxy:
+    SFR: 1.0               # Msun/yr
+    Mstar: 1.0e10          # Msun
+    distance_Mpc: 10.0     # Mpc
+    detector: erosita_erass1
+
+  # Absorption: multiplicative flux factor applied to every source (0 < f <= 1).
+  # 1.0 = no absorption. Configurable; represents Galactic + intrinsic N_H
+  # attenuation in the detection band. (Simple multiplicative model.)
+  absorption_flux_factor: 1.0
+
+  # Detector presets. Completeness is a smooth error-function ramp in log-flux
+  # around the 50% flux limit (NOT a hard cut). `completeness_width_dex` is the
+  # 1-sigma width of the erf ramp in dex of flux.
+  detectors:
+    erosita_erass1:
+      # eRASS1: F(0.5-2 keV) > 5e-14 erg/s/cm^2 at 50% completeness.
+      # Merloni et al. 2024 (arXiv:2401.17274). [Band label CORRECTED: 0.5-2 keV.]
+      band: "0.5-2 keV"
+      flux_limit_50: 5.0e-14        # erg/s/cm^2 at 50% completeness; Merloni+24
+      completeness_width_dex: 0.2   # 1-sigma width of erf ramp (dex of flux)
+      exposure_s: 200.0             # s; representative eRASS1 exposure (equatorial ~100s-200s)
+      cts_to_flux: 1.0e-12          # erg/cm^2 per count (counts-to-flux conversion factor)
+    chandra_like:
+      # Configurable deeper-survey preset (Chandra-like). Limit is a free knob;
+      # default chosen ~10x deeper than eRASS1. Completeness method follows M12
+      # (Voss & Gilfanov 2006); here represented by the same erf ramp.
+      band: "0.5-8 keV"
+      flux_limit_50: 5.0e-15        # erg/s/cm^2 at 50% completeness (configurable)
+      completeness_width_dex: 0.2   # 1-sigma width of erf ramp (dex of flux)
+      exposure_s: 50000.0           # s; representative deep Chandra exposure
+      cts_to_flux: 5.0e-15          # erg/cm^2 per count (counts-to-flux conversion factor)
+
+# -----------------------------------------------------------------------------
+# Phase 2 -- inference (the inverse problem)
+# -----------------------------------------------------------------------------
+# Unbinned Poisson-process (Marshall et al. 1983, 1983ApJ...269...35M)
+# likelihood: ln L = sum_i ln[ dN/dL(L_i) * P_det(L_i) ] - Lambda, with
+# Lambda = int dN/dL * P_det dL the expected detected count. The HMXB single
+# power law is fit for theta = (log10 xi_eff, gamma) with the cutoff FIXED
+# (single-PL data do not constrain the bright-end cutoff; it sits far above the
+# data -- see RESULTS.md). Priors are flat in the sampling space stated below.
+inference:
+  priors:
+    # log10 of the effective normalisation xi_eff = xi * SFR (the product the
+    # data constrain at fixed/unknown SFR). Wide flat prior in log10.
+    log_xi_eff:
+      prior: uniform        # flat in log10(xi_eff)
+      lo: -2.0              # log10 units
+      hi: 4.0
+    # differential slope gamma. Flat prior bracketing all XLF slopes of interest
+    # (HMXB ~1.6, LMXB segments up to ~4.8).
+    gamma:
+      prior: uniform
+      lo: 0.5
+      hi: 4.0
+  # Integration grid for Lambda(theta): points per decade of log10 L over the
+  # XLF support [L_min, L_cut]. 200/dex (~1000 pts over ~5 dex) is converged --
+  # doubling it shifts ln L by < 1e-3 (verified in tests/test_inference.py).
+  grid:
+    points_per_dex: 200
+  # Sampler defaults (overridable per fit / per script config).
+  sampler:
+    n_live: 400             # UltraNest min_num_live_points
+    n_walkers: 32           # emcee ensemble size
+    n_steps: 4000           # emcee steps per walker
+    n_burn: 1000            # emcee burn-in (autocorr-based thinning refines this)

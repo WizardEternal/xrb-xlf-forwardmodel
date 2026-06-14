@@ -1,0 +1,17 @@
+# Extension-only dependencies for the OPTIONAL real-galaxy demonstration
+# (scripts/run_real_demo.py, src/xlf_model/real_data.py).
+#
+# The CORE repo (forward model, inference, recovery suite, hierarchical stack,
+# coverage, all 80 core tests) does NOT need any of these -- it runs on
+# requirements.txt alone.  Install these ONLY to fetch the public HEASARC
+# SFGALHMXB catalogue and run the real-data demo:
+#
+#     .venv\Scripts\python.exe -m pip install -r requirements-extension.txt
+#
+# astroquery pulls in astropy + pyvo + requests (the HEASARC TAP client).
+# Versions are those resolved on 2026-06-11 (Python 3.12, native Windows).
+
+astroquery==0.4.11
+astropy==7.2.0
+pyvo==1.9.1
+requests==2.34.2

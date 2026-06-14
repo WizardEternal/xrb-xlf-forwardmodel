@@ -1,0 +1,48 @@
+# =============================================================================
+# lxsfr_demo.yaml -- configuration for scripts/run_lxsfr_demo.py
+#
+# Phase 3 experiment (c): the L_X-SFR nonlinearity reproduction.
+#
+# Monte-Carlo the TOTAL HMXB X-ray luminosity of a galaxy as a function of its
+# SFR.  At high SFR the population is well-sampled and <L_tot> follows the linear
+# Mineo+12 scaling; at low SFR the discreteness of the bright end (few luminous
+# HMXBs) makes L_tot flatten and its scatter blow up -- the statistical effect
+# discussed by Gilfanov, Grimm & Sunyaev 2004 (MNRAS 351, 1365; astro-ph/0312540).
+#
+# This is the INTRINSIC statistical effect: HMXB only, NO detector cut, NO noise.
+# Every L_tot is the sum of the intrinsic luminosities of a fresh Poisson draw
+# from the XLF.
+# =============================================================================
+
+seed: 20260611
+L_unit: 1.0e38           # erg/s -- definition of L38
+
+# --- HMXB XLF (Mineo+12 truth) ----------------------------------------------
+hmxb:
+  band: "0.5-8 keV"
+  xi: 1.49               # M12 normalization per (Msun/yr)
+  gamma: 1.60            # M12 differential slope
+  L_cut: 2.1e40          # erg/s; high-L cutoff (bounds the bright end)
+
+forward:
+  L_min: 1.0e35          # erg/s; lower bound of the population draw
+
+# --- the SFR scan -----------------------------------------------------------
+lxsfr:
+  sfr_min: 0.01          # Msun/yr
+  sfr_max: 100.0         # Msun/yr
+  n_sfr: 40              # log-spaced SFR grid points
+  n_realizations: 2000   # Monte-Carlo galaxies per SFR (>= 500 required)
+
+# --- the published linear reference -----------------------------------------
+# Mineo+12 Eq. 20: L_X(0.5-8 keV) = 2.61e39 * SFR erg/s (HMXB, high-SFR regime).
+reference:
+  mineo12_slope: 2.61e39   # erg/s per (Msun/yr); M12 Eq. 20
+  band: "0.5-8 keV"
+  # Annotation thresholds (the science of the figure):
+  nonlinear_sfr_lo: 4.0    # M12/GGS04: nonlinearity sets in below ~4-5 Msun/yr
+  nonlinear_sfr_hi: 5.0
+
+run:
+  output_dir: outputs/diagnostics
+  figure: lxsfr_nonlinearity.png

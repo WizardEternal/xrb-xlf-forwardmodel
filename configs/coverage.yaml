@@ -1,0 +1,86 @@
+# =============================================================================
+# coverage.yaml -- configuration for scripts/run_coverage.py
+#
+# Phase 4: POSTERIOR COVERAGE VALIDATION.
+#
+# The recovery suite (Phase 3a, results.jsonl) stored only the 68% credible
+# interval (q16/q84) per fit, so it cannot build a coverage CURVE across
+# credibility levels.  This is a dedicated coverage run: many independent
+# selection-aware fits at ONE representative config, each storing the central
+# credible-interval edges at a ladder of nominal levels {0.1, ..., 0.9}, so the
+# analysis can ask -- for each nominal level c -- what FRACTION of realizations
+# had their c% central interval contain the truth.  A well-calibrated likelihood
+# gives empirical coverage ~ nominal: a near-diagonal curve.
+#
+# This is the same coverage methodology used in the sibling repo
+# sbi-xray-calibration (its src/sbixcal/calibrate.py expected-coverage test).
+#
+# Crash-resumable: every completed fit is appended as one JSONL row keyed by
+# `realization`; on restart, present keys are skipped.
+# =============================================================================
+
+seed_base: 20260611      # base seed; per-realization seeds derive from it
+
+L_unit: 1.0e38           # erg/s -- definition of L38 (matches xlf_defaults)
+
+# --- the coverage experiment -------------------------------------------------
+# One representative config: N_det ~ 50, gamma = 1.6,
+# selection-aware likelihood.  >= 200 independent realizations of the SAME
+# galaxy config (different sim seeds) so the binomial error on each coverage
+# point is small (~0.03 on 200 trials).
+coverage:
+  n_det_target: 50        # representative detected-count regime
+  gamma_true: 1.6         # the M12 central slope
+  n_realizations: 250     # >= 200; 250 -> binomial err ~0.03
+  fitter: selection-aware # coverage is validated for the CORRECT likelihood
+  # nominal central-credibility levels at which we record the interval edges and,
+  # in analysis, measure empirical coverage.  {0.1 .. 0.9}.
+  nominal_levels: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+# --- the simulated galaxy (fixed; SFR tuned to hit N_det_target) -------------
+# Same fixed (distance, detector) as the recovery suite so the coverage run
+# probes the identical selection regime the money plot reports.
+galaxy:
+  distance_Mpc: 5.0
+  detector: chandra_like
+  absorption_flux_factor: 1.0
+  xi_true: 1.49           # Mineo+12 normalization per (Msun/yr); the TRUTH
+  L_cut: 2.1e40           # erg/s; high-L cutoff (FIXED in simulation and fit)
+
+# --- forward-model settings (population + observation) ----------------------
+forward:
+  L_min: 1.0e35
+  absorption_flux_factor: 1.0
+  detectors:
+    chandra_like:
+      band: "0.5-8 keV"
+      flux_limit_50: 5.0e-15
+      completeness_width_dex: 0.2
+      exposure_s: 50000.0
+      cts_to_flux: 5.0e-15
+
+# --- inference (priors, grid, sampler) --------------------------------------
+# Identical priors/grid/sampler to the recovery suite so the coverage result
+# applies to the same fitter the money plot uses.
+inference:
+  priors:
+    log_xi_eff:
+      prior: uniform
+      lo: -1.0
+      hi: 3.0
+    gamma:
+      prior: uniform
+      lo: 0.8
+      hi: 2.6
+  grid:
+    points_per_dex: 200
+  sampler:
+    n_live: 400
+
+# --- run / parallelism ------------------------------------------------------
+run:
+  sampler: ultranest
+  max_workers: 6           # capped to bound memory use
+  output_dir: outputs/recovery
+  results_jsonl: coverage_results.jsonl   # append-one-row-per-fit (resume key)
+  figure: coverage_curve.png

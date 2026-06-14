@@ -1,0 +1,102 @@
+# =============================================================================
+# real_demo.yaml -- configuration for scripts/run_real_demo.py
+#
+# OPTIONAL EXTENSION -- "demonstration on real data".
+#
+# Selection-aware (and naive, for contrast) HMXB power-law-slope fit on 1-2 real
+# public Chandra point-source catalogues from the Mineo, Gilfanov & Sunyaev 2012
+# (M12) sample, fetched from the HEASARC table SFGALHMXB.  This is a CONSISTENCY
+# CHECK against M12's published slopes, not a re-measurement or a survey.
+#
+# All per-galaxy distances / SFRs / sensitivity limits are transcribed from
+# M12 Table 1 (Mineo et al. 2012, MNRAS 419, 2095; arXiv:1105.4610), p. 3, and
+# live in src/xlf_model/real_data.py:M12_TABLE1 (each value cited there).  This
+# config carries only the *choices* of the demonstration, not the catalogue
+# numbers.
+# =============================================================================
+
+seed: 20260611                 # sampler reproducibility seed
+
+L_unit: 1.0e38                 # erg/s -- definition of L38 (matches xlf_defaults)
+
+# --- galaxy selection -------------------------------------------------------
+# Choice rule: the two galaxies with the MOST catalogued HMXB-region sources
+# (source_flag == 1 in SFGALHMXB, which reproduces M12 Table 1's N_XRB column
+# exactly) that have SFR + distance quoted in M12 Table 1.
+real:
+  galaxies:
+    - "NGC 5457"               # M101; N_XRB=96 (richest), D=6.7 Mpc, SFR=1.5
+    - "NGC 4038/39"            # the Antennae; N_XRB=83, D=13.8 Mpc, SFR=5.4
+
+  # Spatial cut: keep only the HMXB-dominated inner region (M12 Fig. 2).
+  # source_flag values: 1 = inner HMXB region (M12 XLF sample), 2 = outer/CXB,
+  # 3 = excluded bulge.  Keeping [1] matches M12's per-galaxy XLF sample.
+  flag_keep: [1]
+
+  # Conservative fit threshold = threshold_factor * L_lim (the K=0.6 sensitivity
+  # limit tabulated by M12).  M12 themselves used L_th = 1.5 * L_comp (the K=0.8
+  # limit; M12 Sec 7.4).  We mirror the 1.5 factor on the tabulated L_lim -- see
+  # src/xlf_model/real_data.py docstring for the documented caveat.
+  threshold_factor: 1.5
+
+  # Completeness ramp: anchored so completeness = K_anchor at the quoted L_lim.
+  # M12 define L_lim at K(L)=0.6 (Table 1 footnote f), so K_anchor = 0.6.
+  completeness_k_anchor: 0.6
+  completeness_width_dex: 0.2  # 1-sigma width of the erf ramp (dex of flux);
+                               # same as the forward-model default.  The fit is
+                               # insensitive to it given the conservative cut.
+
+# --- HMXB XLF (the fitted model) -- M12 truth for the consistency check ------
+hmxb:
+  preset: mineo12
+  mineo12:
+    band: "0.5-8 keV"          # SFGALHMXB log_lx is 0.5-8 keV (table doc)
+    xi: 1.49                   # M12 normalization per (Msun/yr)
+    gamma: 1.60                # M12 single-PL global slope (gamma = 1.60 +/- 0.02)
+    L_cut: 1.0e41              # erg/s; M12 Sec 7.4 fixed the per-galaxy cut-off
+                               # at L_cut = 1e41 erg/s (above the brightest source)
+  ggs03:
+    band: "2-10 keV"
+    xi: 3.3
+    gamma: 1.61
+    L_cut: 2.1e40
+
+# --- forward-model block (needed by make_hmxb_problem for L_min / support) ---
+forward:
+  L_min: 1.0e35                # erg/s; lower support bound for the XLF integral
+  absorption_flux_factor: 1.0  # real luminosities are already de-absorbed (M12)
+  # NOTE: the real-galaxy detector preset is BUILT PER GALAXY at runtime from the
+  # M12 L_lim (see run_real_demo.py), not taken from this block.  The presets
+  # below are only carried so the config is self-contained for make_hmxb_problem.
+  detectors:
+    erosita_erass1:
+      band: "0.5-2 keV"
+      flux_limit_50: 5.0e-14
+      completeness_width_dex: 0.2
+      exposure_s: 200.0
+      cts_to_flux: 1.0e-12
+    chandra_like:
+      band: "0.5-8 keV"
+      flux_limit_50: 5.0e-15
+      completeness_width_dex: 0.2
+      exposure_s: 50000.0
+      cts_to_flux: 5.0e-15
+
+# --- inference (priors, grid, samplers) -------------------------------------
+inference:
+  priors:
+    log_xi_eff:
+      prior: uniform           # flat in log10(xi_eff = xi*SFR)
+      lo: -2.0
+      hi: 4.0
+    gamma:
+      prior: uniform
+      lo: 0.5
+      hi: 4.0
+  grid:
+    points_per_dex: 200
+  sampler:
+    n_live: 400
+    n_walkers: 32
+    n_steps: 4000
+    n_burn: 1000

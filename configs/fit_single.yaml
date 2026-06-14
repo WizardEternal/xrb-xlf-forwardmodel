@@ -1,0 +1,76 @@
+# =============================================================================
+# fit_single.yaml -- configuration for scripts/run_fit_single.py
+#
+# Simulates ONE galaxy with the forward model (seeded), then fits its detected
+# HMXB luminosities with BOTH the selection-aware and the naive likelihood,
+# under both samplers. Self-contained: carries the same hmxb/forward/inference
+# blocks as xlf_defaults.yaml so the script needs only this one file.
+#
+# The galaxy is deliberately placed in a regime that yields ~50 detected HMXBs
+# (high SFR + nearby + deep Chandra-like preset) so the single-galaxy fit is in
+# the "comfortable" recovery regime for the single-galaxy demo. The faint-regime
+# bias demonstration lives in the test suite and the Phase-3 recovery suite.
+# =============================================================================
+
+seed: 20260611          # global seed for the simulated galaxy (reproducible)
+
+L_unit: 1.0e38          # erg/s -- definition of L38 (matches xlf_defaults)
+
+# --- HMXB XLF (the fitted model). Mineo+12 truth. --------------------------
+hmxb:
+  preset: mineo12
+  mineo12:
+    band: "0.5-8 keV"
+    xi: 1.49              # M12 normalization per (Msun/yr) -- the TRUTH
+    gamma: 1.60           # M12 differential slope -- the TRUTH
+    L_cut: 2.1e40         # erg/s; high-L cutoff (FIXED in the fit)
+    ref_N_gt_1e38_per_sfr: 3.22
+  ggs03:
+    band: "2-10 keV"
+    xi: 3.3
+    gamma: 1.61
+    L_cut: 2.1e40
+
+# --- the simulated galaxy ---------------------------------------------------
+galaxy:
+  SFR: 8.0               # Msun/yr -- high SFR so N_det ~ 50 with a deep preset
+  distance_Mpc: 5.0      # Mpc -- nearby
+  detector: chandra_like # deep preset -> reaches down the XLF
+  absorption_flux_factor: 1.0
+
+# --- forward-model settings (population + observation) ----------------------
+forward:
+  L_min: 1.0e35
+  absorption_flux_factor: 1.0
+  detectors:
+    erosita_erass1:
+      band: "0.5-2 keV"
+      flux_limit_50: 5.0e-14
+      completeness_width_dex: 0.2
+      exposure_s: 200.0
+      cts_to_flux: 1.0e-12
+    chandra_like:
+      band: "0.5-8 keV"
+      flux_limit_50: 5.0e-15
+      completeness_width_dex: 0.2
+      exposure_s: 50000.0
+      cts_to_flux: 5.0e-15
+
+# --- inference (priors, grid, samplers) -------------------------------------
+inference:
+  priors:
+    log_xi_eff:
+      prior: uniform      # flat in log10(xi_eff = xi*SFR); truth = log10(1.49*8) = 1.076
+      lo: -2.0
+      hi: 4.0
+    gamma:
+      prior: uniform
+      lo: 0.5
+      hi: 4.0
+  grid:
+    points_per_dex: 200
+  sampler:
+    n_live: 400
+    n_walkers: 32
+    n_steps: 4000
+    n_burn: 1000
